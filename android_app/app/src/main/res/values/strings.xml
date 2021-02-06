@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">News App</string>
+    <string name="operator1">News URL</string>
+    <string name="display_result">Display Result</string>
+    <string-array name="operations">
+        <item>plus</item>
+        <item>minus</item>
+        <item>times</item>
+        <item>divide</item>
+    </string-array>
+    <string-array name="methods">
+        <item>GET</item>
+        <item>POST</item>
+    </string-array>
+</resources>
