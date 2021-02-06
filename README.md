@@ -1,1 +1,1 @@
-# ds103-project
+# DS103 Project - Fake News Detection
