@@ -1,57 +1,53 @@
-import nltk
-import numpy as np
-import tensorflow as tf
-from nltk.tokenize import sent_tokenize
-from tensorflow.keras import backend as K
-from transformers import BertTokenizer, TFBertModel
+from tensorflow import keras
+import pickle
 
-NB_OF_SENTS = 30
+TITLE_SENT_SIZE = 10
+TEXT_SENT_SIZE = 100
+CHAR_FEAT_SIZE = 10
 
-nltk.download("punkt")
-tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-bert = TFBertModel.from_pretrained("bert-base-uncased")
+def title_and_text_model(title_char2idx, text_char2idx):
+    # TITLE INPUT
+    title_input = keras.layers.Input(shape=(TITLE_SENT_SIZE, CHAR_FEAT_SIZE))
+    title_char_emb = keras.layers.TimeDistributed(keras.layers.Embedding(input_dim=len(title_char2idx) + 1,
+        output_dim=30, input_length=CHAR_FEAT_SIZE))(title_input)  
 
+    title_char_dropout = keras.layers.Dropout(0.5)(title_char_emb)
+    title_char_conv1d = keras.layers.TimeDistributed(keras.layers.Conv1D(kernel_size=3, filters=32,
+        padding='same',activation='tanh', strides=1))(title_char_dropout)
+    title_char_maxpool = keras.layers.TimeDistributed(keras.layers.MaxPooling1D(CHAR_FEAT_SIZE))(title_char_conv1d)
+    title_char_feats = keras.layers.TimeDistributed(keras.layers.Flatten())(title_char_maxpool)
+    
+    # TEXT INPUT
+    text_input = keras.layers.Input(shape=(TEXT_SENT_SIZE, CHAR_FEAT_SIZE))
+    text_char_emb = keras.layers.TimeDistributed(keras.layers.Embedding(input_dim=len(text_char2idx) + 1,
+        output_dim=30, input_length=CHAR_FEAT_SIZE))(text_input)  
 
-def get_model(lstm_cell_size=150):
-    in_id = tf.keras.layers.Input((NB_OF_SENTS, 768), name="input_shape")
-    lstm_later, forward_h, forward_c = tf.keras.layers.LSTM(lstm_cell_size, return_sequences=True, return_state=True)(
-        in_id)
-    linear = tf.keras.layers.Dense(lstm_cell_size)(forward_h)
-    attention = tf.keras.layers.dot([lstm_later, linear], axes=(-1))
-    attention = tf.keras.layers.Activation('softmax', name='attention_vec')(attention)
-    attention = tf.keras.layers.RepeatVector(lstm_cell_size)(attention)
-    attention = tf.keras.layers.Permute([2, 1])(attention)
-    sent_representation = tf.keras.layers.multiply([lstm_later, attention])
-    sent_representation = tf.keras.layers.Lambda(lambda xin: K.sum(xin, axis=1))(sent_representation)
-    sent_representation_final = tf.keras.layers.Concatenate()([sent_representation, forward_h])
-    drop = tf.keras.layers.Dropout(0.2)(sent_representation_final)
-    predictions = tf.keras.layers.Dense(2, activation='softmax')(drop)
-    model = tf.keras.Model(inputs=in_id, outputs=predictions)
-    opt = tf.keras.optimizers.Adam(learning_rate=0.001)
-    model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['acc'])
+    text_char_dropout = keras.layers.Dropout(0.5)(text_char_emb)
+    text_char_conv1d = keras.layers.TimeDistributed(keras.layers.Conv1D(kernel_size=3, filters=32,
+        padding='same',activation='tanh', strides=1))(text_char_dropout)
+    text_char_maxpool = keras.layers.TimeDistributed(keras.layers.MaxPooling1D(CHAR_FEAT_SIZE))(text_char_conv1d)
+    text_char_feats = keras.layers.TimeDistributed(keras.layers.Flatten())(text_char_maxpool)
+    
+    all_feat = keras.layers.concatenate([title_char_feats, text_char_feats])
+
+    all_out = keras.layers.SpatialDropout1D(0.3)(all_feat)
+
+    bi_lstm = keras.layers.Bidirectional(keras.layers.LSTM(units=100,
+            return_sequences=False))(all_out)
+
+    out = keras.layers.Dense(1, activation="sigmoid")(bi_lstm)
+
+    model = keras.models.Model([title_input, text_input], out)
+    model.compile(optimizer='adam', loss=keras.losses.binary_crossentropy, metrics=['acc'])
+
     return model
 
-
-def get_embedding(text: str):
-    text = text.lower()
-    sents = sent_tokenize(text)
-    snt_good = []
-    for idx, snt in enumerate(sents):
-        if idx == NB_OF_SENTS:
-            break
-        snt_good.append(snt)
-    while len(snt_good) != NB_OF_SENTS:
-        snt_good.append('')
-
-    assert (len(snt_good) == NB_OF_SENTS)
-    encoded_inputs = tokenizer(snt_good, padding=True, truncation=True, return_tensors="tf", max_length=60)
-    output = bert(encoded_inputs)
-    y = tf.keras.layers.GlobalAveragePooling1D()(output[0])
-    y = np.reshape(y, (-1, 30, 768))
-    return y
-
-
-def load_model():
-    model = get_model()
-    model.load_weights('model_weights/')
+def load_model(weights_path='../model.h5', char2idx_path='../char2idxs.pkl'):
+    with open(char2idx_path, 'rb') as f:
+        char2idxs = pickle.load(f)
+    model = title_and_text_model(char2idxs['title_char2idx'], char2idxs['text_char2idx'])
+    model.load_weights(weights_path)
     return model
+
+if __name__ == '__main__':
+    model = load_model()
