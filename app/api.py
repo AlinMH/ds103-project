@@ -1,3 +1,4 @@
+import nltk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from newsplease import NewsPlease
@@ -13,6 +14,7 @@ class ClassificationReport(BaseModel):
 
 
 app = FastAPI()
+nltk.download("punkt")
 
 origins = [
     "http://localhost",
