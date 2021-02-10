@@ -8,6 +8,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 
 import cz.msebera.android.httpclient.client.ClientProtocolException;
 import cz.msebera.android.httpclient.client.HttpClient;
@@ -57,7 +58,8 @@ public class ClassifyNewsAsyncTask extends AsyncTask<String, Void, String> {
     protected void onPostExecute(String result) {
         try {
             JSONObject jsonObject = new JSONObject(result);
-            String title = jsonObject.getString("title");
+            byte[] titleBytes = jsonObject.getString("title").getBytes("ISO-8859-1");
+            String title = new String(titleBytes, "UTF-8");
             double confidence = jsonObject.getDouble("confidence");
             String newsClass = jsonObject.getString("class_");
 
@@ -65,7 +67,7 @@ public class ClassifyNewsAsyncTask extends AsyncTask<String, Void, String> {
             resultConfidence.setText(Double.toString(confidence));
             resultClass.setText(newsClass);
 
-        } catch (JSONException e) {
+        } catch (JSONException | UnsupportedEncodingException e) {
             e.printStackTrace();
         }
 
